@@ -16,3 +16,17 @@ extension Data {
         return chunks
     }
 }
+
+fileprivate let hexAlphabet = Array("0123456789abcdef".unicodeScalars)
+
+extension Data {
+    func hex(spacing: Bool = false) -> String {
+        String(reduce(into: "".unicodeScalars) { result, value in
+            result.append(hexAlphabet[Int(value / 0x10)])
+            result.append(hexAlphabet[Int(value % 0x10)])
+            if spacing {
+                result.append(" ")
+            }
+        })
+    }
+}

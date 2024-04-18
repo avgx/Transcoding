@@ -8,6 +8,6 @@ let package = Package(
     products: [.library(name: "Transcoding", targets: ["Transcoding"])],
     targets: [
         .target(name: "Transcoding"),
-        .testTarget(name: "TranscodingTests", dependencies: ["Transcoding"])
+        .testTarget(name: "TranscodingTests", dependencies: ["Transcoding"], resources: [.process("Resources")])
     ]
 )
