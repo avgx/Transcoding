@@ -402,7 +402,7 @@ public class VideoDecoderFmp4Adaptor {
 }
 
 
-enum Mp4ParseError : Error {
+public enum Mp4ParseError : Error {
     case ftyp
     
     case typeNotAscii
