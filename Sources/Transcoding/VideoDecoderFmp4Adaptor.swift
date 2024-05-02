@@ -7,24 +7,28 @@ public class VideoDecoderFmp4Adaptor {
     var trackID: Int?
     var sequenceNumber: Int?
     
-    var is264: Bool {
+    public var is264: Bool {
         sps != nil && pps != nil && vps == nil
     }
-    var is265: Bool {
+    public var is265: Bool {
         sps != nil && pps != nil && vps != nil
     }
+    
+    var ftypDone: Bool = false
+    var moovDone: Bool = false
     
     var sps: [UInt8]?
     var pps: [UInt8]?
     var vps: [UInt8]?
     
-    var width: Int?
-    var height: Int?
+    public var width: Int?
+    public var height: Int?
     
     var buffer: Data = Data(capacity: 1000_000)
+    public var bytesConsumed: Int = 0
     
     let videoDecoder: VideoDecoder
-    var formatDescription: CMVideoFormatDescription?
+    public private(set) var formatDescription: CMVideoFormatDescription?
     
     static let logger = Logger(subsystem: "Transcoding", category: "VideoDecoderFmp4Adaptor")
     
@@ -41,6 +45,7 @@ public class VideoDecoderFmp4Adaptor {
         while(buffer.count > 0) {
             try buffer.withUnsafeBytes {
                 consumed = try parse(pointer: $0, count: buffer.count, parent: "")
+                bytesConsumed += consumed
             }
             if consumed == 0 {
                 break
@@ -92,6 +97,14 @@ public class VideoDecoderFmp4Adaptor {
             throw Mp4ParseError.typeNotAscii
         }
         
+        if parent.isEmpty && typeAscii != "ftyp" && !ftypDone {
+            throw Mp4ParseError.ftyp
+        }
+        
+        if parent.isEmpty && ftypDone && typeAscii != "moov" && !moovDone {
+            throw Mp4ParseError.unexpectedAtom
+        }
+        
         if parent.isEmpty && !["moof", "mdat", "ftyp", "moov"].contains(typeAscii) {
             throw Mp4ParseError.unexpectedAtom
         }
@@ -118,6 +131,13 @@ public class VideoDecoderFmp4Adaptor {
         //TODO: consume atom with inner structure from array `rebased`
         //consume boxSize bytes
         try consumeBox(pointer: rebased, count: sliceCount, parent: parent, atom: typeAscii)
+        
+        if typeAscii == "ftyp" {
+            ftypDone = true
+        }
+        if typeAscii == "moov" {
+            moovDone = true
+        }
         
         return boxSize
     }
