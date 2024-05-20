@@ -95,8 +95,6 @@ public final class VideoDecoder {
     }
 
     public func decode(_ sampleBuffer: CMSampleBuffer) {
-        let uuid = UUID().uuidString
-        print(uuid)
         decodingQueue.sync {
             if decompressionSession == nil || sessionInvalidated {
                 decompressionSession = createDecompressionSession()
@@ -130,9 +128,9 @@ public final class VideoDecoder {
                             )
                             for continuation in self.continuations.values {
                                 let yieldResult = continuation.yield(sampleBuffer)
-                                print(uuid)
                                 switch yieldResult {
                                 case .enqueued(let remaining):
+                                    print("enqueued remaining:\(remaining)")
                                     self.enqueuedRemaining = remaining
                                 case .dropped(_):
                                     print("dropped")

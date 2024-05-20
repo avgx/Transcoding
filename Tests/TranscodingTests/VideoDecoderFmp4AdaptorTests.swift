@@ -89,6 +89,7 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
             let image = UIImage(ciImage: ci)
             XCTAssertEqual(image.size.width, 640)
             XCTAssertEqual(image.size.height, 360)
+            
         }
         print("done")
     }

@@ -64,19 +64,19 @@ public class VideoDecoderFmp4Adaptor {
             return
         }
         
-        if videoDecoder.isBufferAlmostFull {
+        if videoDecoder.isBufferAlmostFull && !needDropPFrames {
             needDropPFrames = true
-        } else if videoDecoder.isBufferAlmostEmpty {
+        } else if videoDecoder.isBufferAlmostEmpty && needDropPFrames {
             needDropPFrames = false
         }
         
         if !isIDR && needDropPFrames {
-            self.logger?.log("\(#function) drop P frame")
+            self.logger?.log("decodeAVCCFrame drop P frame")
             return
         }
         
         let enqueuedRemaining = videoDecoder.enqueuedRemaining
-        self.logger?.log("\(#function) isIDR:\(isIDR) enqueuedRemaining:\(enqueuedRemaining)")
+        self.logger?.log("decodeAVCCFrame isIDR:\(isIDR) enqueuedRemaining:\(enqueuedRemaining)")
         
         var data = data
         data.withUnsafeMutableBytes { pointer in
