@@ -5,6 +5,7 @@ public extension VideoDecoder {
         // MARK: Lifecycle
 
         public init(
+            outputBufferCount: Int? = nil,
             imageBufferAttributes: CFDictionary? = nil,
             outputPoolRequestedMinimumBufferCount: Int? = nil,
             enableHardwareAcceleratedVideoDecoder: Bool? = nil,
@@ -27,6 +28,7 @@ public extension VideoDecoder {
             generatePerFrameHDRDisplayMetadata: Bool? = nil,
             requestedMVHEVCVideoLayerIDs: [Int64]? = nil
         ) {
+            self.outputBufferCount = outputBufferCount
             self.imageBufferAttributes = imageBufferAttributes
             self.outputPoolRequestedMinimumBufferCount = outputPoolRequestedMinimumBufferCount
             self.enableHardwareAcceleratedVideoDecoder = enableHardwareAcceleratedVideoDecoder
@@ -59,6 +61,7 @@ public extension VideoDecoder {
         // MARK: - Pixel buffer pools
 
         public var outputPoolRequestedMinimumBufferCount: Int?
+        public var outputBufferCount: Int?
 
         // MARK: - Hardware acceleration
 

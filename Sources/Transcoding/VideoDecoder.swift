@@ -10,6 +10,8 @@ import UIKit
 public final class VideoDecoder {
     // MARK: Lifecycle
 
+    public private(set) var enqueuedRemaining: Int = 0
+    
     public init(config: Config) {
         self.config = config
 
@@ -30,12 +32,47 @@ public final class VideoDecoder {
         didSet {
             decodingQueue.sync {
                 sessionInvalidated = true
+                enqueuedRemaining = config.outputBufferCount ?? 0
             }
         }
     }
+    
+    /// 20%
+    private var fullMark: Int {
+        (config.outputBufferCount ?? 0) * 2 / 10
+    }
+    
+    /// 80%
+    private var emptyMark: Int {
+        (config.outputBufferCount ?? 0) * 8 / 10
+    }
 
+    public var bufferingPolicy: AsyncStream<CMSampleBuffer>.Continuation.BufferingPolicy {
+        if let count = config.outputBufferCount {
+            .bufferingNewest(count)
+        } else {
+            .unbounded
+        }
+    }
+    
+    public var isBufferAlmostFull: Bool {
+        enqueuedRemaining < fullMark
+    }
+    
+    public var isBufferAlmostEmpty: Bool {
+        enqueuedRemaining > emptyMark
+    }
+    
+    public var isBufferFull: Bool {
+        enqueuedRemaining == 0
+    }
+    
+    public var isBufferEmpty: Bool {
+        enqueuedRemaining == (config.outputBufferCount ?? 0)
+    }
+    
     public var decodedSampleBuffers: AsyncStream<CMSampleBuffer> {
-        .init { continuation in
+        .init(bufferingPolicy: bufferingPolicy) { continuation in
             let id = UUID()
             continuations[id] = continuation
             continuation.onTermination = { [weak self] _ in
@@ -47,6 +84,7 @@ public final class VideoDecoder {
     public func invalidate() {
         decodingQueue.sync {
             sessionInvalidated = true
+            enqueuedRemaining = 0
         }
     }
 
@@ -57,6 +95,8 @@ public final class VideoDecoder {
     }
 
     public func decode(_ sampleBuffer: CMSampleBuffer) {
+        let uuid = UUID().uuidString
+        print(uuid)
         decodingQueue.sync {
             if decompressionSession == nil || sessionInvalidated {
                 decompressionSession = createDecompressionSession()
@@ -89,7 +129,16 @@ public final class VideoDecoder {
                                 sampleTiming: sampleTiming
                             )
                             for continuation in self.continuations.values {
-                                continuation.yield(sampleBuffer)
+                                let yieldResult = continuation.yield(sampleBuffer)
+                                print(uuid)
+                                switch yieldResult {
+                                case .enqueued(let remaining):
+                                    self.enqueuedRemaining = remaining
+                                case .dropped(_):
+                                    print("dropped")
+                                case .terminated:
+                                    print("terminated")
+                                }
                             }
                         } catch {
                             Self.logger.error("Error in decode frame output handler: \(error, privacy: .public)")

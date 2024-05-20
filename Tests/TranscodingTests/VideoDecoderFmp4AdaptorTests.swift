@@ -61,24 +61,35 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
     func testFmp4() async throws {
         let d = bin_data(fromFile: "live")!
         
-        let decoder = VideoDecoder(config: .init())
-        var decodedStream = decoder.decodedSampleBuffers.makeAsyncIterator()
-        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder)
+        let decoder = VideoDecoder(config: .init(outputBufferCount: 100))
+        var decodedStream = decoder.decodedSampleBuffers//.makeAsyncIterator()
+        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, logger: nil)
         
         let chunks = d.split(by: 256)
         
-        for chunk in chunks {
-            try decoderAdaptor.enqueue(data: chunk)
+        Task {
+            for chunk in chunks {
+                print("enqueue chunk")
+                try decoderAdaptor.enqueue(data: chunk)
+//                try await Task.sleep(nanoseconds: NSEC_PER_SEC / 10)
+            }
+            print("done chunks")
         }
         
+//        try await Task.sleep(nanoseconds: NSEC_PER_SEC)
+        
         XCTAssert(decoder.formatDescription != nil)
-        let decodedSampleBuffer = await decodedStream.next()!
-        
-        XCTAssertNotNil(decodedSampleBuffer.imageBuffer)
-        
-        let ci = CIImage(cvImageBuffer: decodedSampleBuffer.imageBuffer!)
-        let image = UIImage(ciImage: ci)
-        XCTAssertEqual(image.size.width, 640)
-        XCTAssertEqual(image.size.height, 360)
+        for await decodedSampleBuffer in decodedStream {
+            try await Task.sleep(nanoseconds: NSEC_PER_SEC / 33)
+            let q = decoder.enqueuedRemaining
+            print("read decodedSampleBuffer enqueuedRemaining: \(q)")
+            XCTAssertNotNil(decodedSampleBuffer.imageBuffer)
+            
+            let ci = CIImage(cvImageBuffer: decodedSampleBuffer.imageBuffer!)
+            let image = UIImage(ciImage: ci)
+            XCTAssertEqual(image.size.width, 640)
+            XCTAssertEqual(image.size.height, 360)
+        }
+        print("done")
     }
 }
