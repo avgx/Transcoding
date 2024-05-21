@@ -31,7 +31,7 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         
         let decoder = VideoDecoder(config: .init())
         var decodedStream = decoder.decodedSampleBuffers.makeAsyncIterator()
-        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder)
+        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, uuid: UUID())
         
         let chunks = d.split(by: 256)
         
@@ -47,7 +47,7 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         
         let decoder = VideoDecoder(config: .init())
         var decodedStream = decoder.decodedSampleBuffers.makeAsyncIterator()
-        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder)
+        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, uuid: UUID())
         
         let chunks = d.split(by: 256)
         
@@ -63,7 +63,7 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         
         let decoder = VideoDecoder(config: .init(outputBufferCount: 100))
         var decodedStream = decoder.decodedSampleBuffers//.makeAsyncIterator()
-        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, logger: nil)
+        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, uuid: UUID(), logger: nil)
         
         let chunks = d.split(by: 256)
         

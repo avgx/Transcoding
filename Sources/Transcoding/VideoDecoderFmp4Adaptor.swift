@@ -30,17 +30,19 @@ public class VideoDecoderFmp4Adaptor {
     let videoDecoder: VideoDecoder
     public private(set) var formatDescription: CMVideoFormatDescription?
     
+    let uuid: UUID
     let logger: Logger?
     
-    public init(videoDecoder: VideoDecoder, logger: Logger? = Logger(subsystem: "Transcoding", category: "VideoDecoderFmp4Adaptor")) {
+    public init(videoDecoder: VideoDecoder, uuid: UUID, logger: Logger? = Logger(subsystem: "Transcoding", category: "VideoDecoderFmp4Adaptor")) {
         self.videoDecoder = videoDecoder
+        self.uuid = uuid
         self.logger = logger
     }
     
     public func enqueue(data: Data) throws {
         buffer.append(data)
         if buffer.count > 4_000_000 {
-            self.logger?.warning("buffer size \(self.buffer.count)")
+            self.logger?.warning("\(self.uuid) buffer size \(self.buffer.count)")
         }
         var consumed = 0
         while(buffer.count > 0) {
@@ -57,7 +59,7 @@ public class VideoDecoderFmp4Adaptor {
     
     var needDropPFrames: Bool = false
     
-    func decodeAVCCFrame(_ data: Data, isIDR: Bool) {
+    func decodeAVCCFrame(_ data: Data, I: Bool) {
         
         guard let formatDescription else {
             //self.logger?.warning("No format description; need sync frame")
@@ -66,17 +68,19 @@ public class VideoDecoderFmp4Adaptor {
         
         if videoDecoder.isBufferAlmostFull && !needDropPFrames {
             needDropPFrames = true
+            self.logger?.log("\(self.uuid) isBufferAlmostFull")
         } else if videoDecoder.isBufferAlmostEmpty && needDropPFrames {
             needDropPFrames = false
+            self.logger?.log("\(self.uuid) isBufferAlmostEmpty")
         }
         
-        if !isIDR && needDropPFrames {
-            self.logger?.log("decodeAVCCFrame drop P frame")
+        if !I && needDropPFrames {
+            self.logger?.log("\(self.uuid) decodeAVCCFrame drop P frame")
             return
         }
         
         let enqueuedRemaining = videoDecoder.enqueuedRemaining
-        self.logger?.log("decodeAVCCFrame isIDR:\(isIDR) enqueuedRemaining:\(enqueuedRemaining)")
+        self.logger?.log("\(self.uuid) decodeAVCCFrame I:\(I) enqueuedRemaining:\(enqueuedRemaining)")
         
         var data = data
         data.withUnsafeMutableBytes { pointer in
@@ -93,7 +97,7 @@ public class VideoDecoderFmp4Adaptor {
                 videoDecoder.decode(sampleBuffer)
                 
             } catch {
-                self.logger?.error("Failed to create sample buffer with error: \(error, privacy: .public)")
+                self.logger?.error("\(self.uuid) Failed to create sample buffer with error: \(error, privacy: .public)")
             }
         }
     }
@@ -145,7 +149,7 @@ public class VideoDecoderFmp4Adaptor {
         precondition(slice.count == boxSize - 8)
         let sliceCount = boxSize - 8
         let rebased = UnsafeRawBufferPointer(rebasing: slice)
-        self.logger?.debug("\(parent)/\(typeAscii)(\(boxSize))")
+        self.logger?.debug("\(self.uuid) \(parent)/\(typeAscii)(\(boxSize))")
         //TODO: consume atom with inner structure from array `rebased`
         //consume boxSize bytes
         try consumeBox(pointer: rebased, count: sliceCount, parent: parent, atom: typeAscii)
@@ -182,17 +186,15 @@ public class VideoDecoderFmp4Adaptor {
             
             // top level atoms
         case "ftyp":
-            self.logger?.debug("ftyp \(count) bytes")
-            self.logger?.debug("ftyp \(Array(pointer).hex())")
+            self.logger?.debug("\(self.uuid) ftyp \(count) bytes \(Array(pointer).hex())")
         case "moov":
-            self.logger?.debug("moov \(count) bytes")
-            self.logger?.debug("moov \(Array(pointer).hex())")
+            self.logger?.debug("\(self.uuid) moov \(count) bytes \(Array(pointer).hex())")
             _ = try parseInner(pointer: pointer, count: count, atom: atom)
         case "moof":
-            self.logger?.debug("moof \(count) bytes")
+            self.logger?.debug("\(self.uuid) moof \(count) bytes")
             _ = try parseInner(pointer: pointer, count: count, atom: atom)
         case "mdat":
-            self.logger?.debug("mdat \(count) bytes")
+            self.logger?.debug("\(self.uuid) mdat \(count) bytes")
             consumeBox_mdat(pointer: pointer, count: count)
             // known usefull atoms
         case "avc1":
@@ -201,7 +203,7 @@ public class VideoDecoderFmp4Adaptor {
             let xheight: UInt16 = UInt16(pointer[26]) << 8 | UInt16(pointer[27])
             self.width = Int(xwidth)
             self.height = Int(xheight)
-            self.logger?.debug("\(xwidth)x\(xheight)")
+            self.logger?.debug("\(self.uuid) \(xwidth)x\(xheight)")
             //78 is offset from avc1 atom start code (from size)
             let offset = 78 - 8
             let slice = pointer[(8+offset)...]
@@ -214,7 +216,7 @@ public class VideoDecoderFmp4Adaptor {
             let xheight: UInt16 = UInt16(pointer[26]) << 8 | UInt16(pointer[27])
             self.width = Int(xwidth)
             self.height = Int(xheight)
-            self.logger?.debug("\(xwidth)x\(xheight)")
+            self.logger?.debug("\(self.uuid) \(xwidth)x\(xheight)")
             
             let offset = 78 - 8
             let slice = pointer[(8+offset)...]
@@ -223,7 +225,7 @@ public class VideoDecoderFmp4Adaptor {
             //avc1 / hvc1
             _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)")
         case "avcC":
-            self.logger?.debug("avcC \(Array(pointer).hex())")
+            self.logger?.debug("\(self.uuid) avcC \(Array(pointer).hex())")
             let x = try Atom_avcC(data: Array(pointer))
             self.sps = x.sps
             self.pps = x.pps
@@ -231,7 +233,7 @@ public class VideoDecoderFmp4Adaptor {
             self.videoDecoder.setFormatDescription(formatDescription)
             self.formatDescription = formatDescription
         case "hvcC":
-            self.logger?.debug("hvcC \(Array(pointer).hex())")
+            self.logger?.debug("\(self.uuid) hvcC \(Array(pointer).hex())")
             let x = dump_hvcC(data: Array(pointer))
             self.sps = x.sps
             self.pps = x.pps
@@ -260,7 +262,7 @@ public class VideoDecoderFmp4Adaptor {
             //    "tfdt", "trik", "ctts", "stts", "stco", "stsc":
             //    print("skip \(parent)/\(atom) \(Array(pointer).hexStringEncoded().prefix(count*2))")
         default:
-            self.logger?.debug("skip \(parent)/\(atom)")
+            self.logger?.debug("\(self.uuid) skip \(parent)/\(atom)")
             return
         }
     }
@@ -277,7 +279,7 @@ public class VideoDecoderFmp4Adaptor {
         
         let TrackID_bytes: [UInt8] = Array(pointer[4..<8])
         let TrackID = TrackID_bytes.uint32Value
-        self.logger?.debug("tfhd: TrackID \(TrackID)")
+        self.logger?.debug("\(self.uuid) tfhd: TrackID \(TrackID)")
         self.trackID = Int(TrackID)
         
     }
@@ -293,7 +295,7 @@ public class VideoDecoderFmp4Adaptor {
         //        let version = versionAndFlags >> 24
         //        let flags = versionAndFlags & 0x00ffffff
         let SequenceNumber = SequenceNumber_bytes.uint32Value
-        self.logger?.debug("mfhd: SequenceNumber \(SequenceNumber)")
+        self.logger?.debug("\(self.uuid) mfhd: SequenceNumber \(SequenceNumber)")
         self.sequenceNumber = Int(SequenceNumber)
         
     }
@@ -307,7 +309,7 @@ public class VideoDecoderFmp4Adaptor {
         
         let nalType = pointer[0]
         let x = ((nalType & 0x7e) >> 1)
-        self.logger?.debug("NALU nalType:\(nalType) x:\(x) count:\(count) seq:\(seq)")
+        self.logger?.debug("\(self.uuid) NALU nalType:\(nalType) x:\(x) count:\(count) seq:\(seq)")
         
         //NAL header: 0x2601     I
         //NAL header: 0x0201     P
@@ -322,21 +324,21 @@ public class VideoDecoderFmp4Adaptor {
             //self.onFrame(format, naluData, true, seq)
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, isIDR: true)
+            self.decodeAVCCFrame(avcc, I: true)
         case 0x02:  // P    Type:2 //x:1
             //onFrame(naluData)
             //self.onFrame(format, naluData, false, seq)
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, isIDR: false)
+            self.decodeAVCCFrame(avcc, I: false)
         case 0x40:  // VPS  Type:64 //x:32
-            print("VPS")
+            self.logger?.debug("\(self.uuid) VPS")
         case 0x42:  // SPS  Type:66 //x:33
-            print("SPS")
+            self.logger?.debug("\(self.uuid) SPS")
         case 0x44:  // PPS  Type:68 //x:34
-            print("PPS")
+            self.logger?.debug("\(self.uuid) PPS")
         default:
-            print("skip")
+            self.logger?.debug("\(self.uuid) skip")
         }
     }
     
@@ -350,30 +352,30 @@ public class VideoDecoderFmp4Adaptor {
         let nalType = pointer[0] & 0x1F
         let nalType2 = pointer[0]
         let x = ((nalType2 & 0x7e) >> 1)
-        self.logger?.debug("NALU Nal type nalType:\(nalType) nalType2:\(nalType2) x:\(x) count:\(count) seq:\(seq)")
+        self.logger?.debug("\(self.uuid) NALU Nal type nalType:\(nalType) nalType2:\(nalType2) x:\(x) count:\(count) seq:\(seq)")
         
         let naluData = Array(pointer)
         
         //onFrame(i)  //тут префикса с размером нет!
         switch nalType {
         case 0x05:
-            self.logger?.debug("Nal type is IDR frame")
+            self.logger?.debug("\(self.uuid) Nal type is IDR frame")
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, isIDR: true)
+            self.decodeAVCCFrame(avcc, I: true)
         case 0x07:
-            self.logger?.debug("Nal type is SPS")
+            self.logger?.debug("\(self.uuid) Nal type is SPS")
         case 0x08:
-            self.logger?.debug("Nal type is PPS")
+            self.logger?.debug("\(self.uuid) Nal type is PPS")
         case 0x01:
-            self.logger?.debug("Nal type is B/P frame")
+            self.logger?.debug("\(self.uuid) Nal type is B/P frame")
             //            if nalType2 == 65 { //
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, isIDR: false)
+            self.decodeAVCCFrame(avcc, I: false)
             //            }
         default:
-            self.logger?.debug("Nal type ignore \(nalType)")
+            self.logger?.debug("\(self.uuid) Nal type ignore \(nalType)")
         }
     }
     //    NALU Nal type nalType:7 nalType2:103 x:51 count:28 seq:125
@@ -402,7 +404,7 @@ public class VideoDecoderFmp4Adaptor {
         
         guard trackID == 1 else {
             //think that video is track 1 always
-            print("audio from \(self.trackID)")
+            self.logger?.debug("\(self.uuid) audio from \(self.trackID ?? -1)")
             return
         }
         precondition(is264 || is265)
@@ -420,7 +422,7 @@ public class VideoDecoderFmp4Adaptor {
             consumed += 4
             
             if nalCount + consumed > count {
-                self.logger?.error("UNEXPECTED nalCount:\(nalCount) consumed:\(consumed) count:\(count)")
+                self.logger?.error("\(self.uuid) UNEXPECTED nalCount:\(nalCount) consumed:\(consumed) count:\(count)")
                 break
             }
             
