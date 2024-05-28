@@ -7,6 +7,8 @@ import UIKit
 
 // MARK: - VideoDecoder
 
+public typealias CMSampleBufferWithDate = (CMSampleBuffer, Date?)
+
 public final class VideoDecoder {
     // MARK: Lifecycle
 
@@ -47,7 +49,7 @@ public final class VideoDecoder {
         (config.outputBufferCount ?? 0) * 8 / 10
     }
 
-    public var bufferingPolicy: AsyncStream<CMSampleBuffer>.Continuation.BufferingPolicy {
+    public var bufferingPolicy: AsyncStream<CMSampleBufferWithDate>.Continuation.BufferingPolicy {
         if let count = config.outputBufferCount {
             .bufferingNewest(count)
         } else {
@@ -71,7 +73,7 @@ public final class VideoDecoder {
         enqueuedRemaining == (config.outputBufferCount ?? 0)
     }
     
-    public var decodedSampleBuffers: AsyncStream<CMSampleBuffer> {
+    public var decodedSampleBuffers: AsyncStream<CMSampleBufferWithDate> {
         .init(bufferingPolicy: bufferingPolicy) { continuation in
             let id = UUID()
             continuations[id] = continuation
@@ -94,7 +96,8 @@ public final class VideoDecoder {
         }
     }
 
-    public func decode(_ sampleBuffer: CMSampleBuffer) {
+    public func decode(_ sampleBuffer: CMSampleBuffer, ts: Date? = nil) {
+        print("ts: \(ts?.timeIntervalSince1970)")
         decodingQueue.sync {
             if decompressionSession == nil || sessionInvalidated {
                 decompressionSession = createDecompressionSession()
@@ -127,15 +130,18 @@ public final class VideoDecoder {
                                 sampleTiming: sampleTiming
                             )
                             for continuation in self.continuations.values {
-                                let yieldResult = continuation.yield(sampleBuffer)
+                                print("ts: \(ts?.timeIntervalSince1970)")
+                                let yieldResult = continuation.yield((sampleBuffer, ts))
                                 switch yieldResult {
                                 case .enqueued(let remaining):
-                                    print("enqueued remaining:\(remaining)")
+                                    //print("enqueued remaining:\(remaining)")
                                     self.enqueuedRemaining = remaining
                                 case .dropped(_):
-                                    print("dropped")
+                                    Self.logger.info("dropped")
                                 case .terminated:
-                                    print("terminated")
+                                    Self.logger.info("terminated")
+                                @unknown default:
+                                    print("unknown")
                                 }
                             }
                         } catch {
@@ -153,7 +159,7 @@ public final class VideoDecoder {
 
     static let logger = Logger(label: "Transcoding")
 
-    var continuations: [UUID: AsyncStream<CMSampleBuffer>.Continuation] = [:]
+    var continuations: [UUID: AsyncStream<CMSampleBufferWithDate>.Continuation] = [:]
 
     var willEnterForegroundTask: Task<Void, Never>?
 

@@ -39,7 +39,7 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         let chunks = d.split(by: 256)
         
         for chunk in chunks {
-            try decoderAdaptor.enqueue(data: chunk)
+            try decoderAdaptor.enqueue(data: chunk, ts: nil)
         }
         
         XCTAssert(decoder.formatDescription != nil)
@@ -55,7 +55,7 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         let chunks = d.split(by: 256)
         
         for chunk in chunks {
-            try decoderAdaptor.enqueue(data: chunk)
+            try decoderAdaptor.enqueue(data: chunk, ts: nil)
         }
         
         XCTAssert(decoder.formatDescription != nil)
@@ -73,8 +73,9 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         
         Task {
             for chunk in chunks {
-                print("enqueue chunk")
-                try decoderAdaptor.enqueue(data: chunk)
+                let ts = Date()
+                print("enqueue chunk \(ts.timeIntervalSince1970)")
+                try decoderAdaptor.enqueue(data: chunk, ts: ts)
                 try await Task.sleep(nanoseconds: NSEC_PER_SEC / 10)
             }
             print("done chunks")
@@ -84,12 +85,12 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         try await Task.sleep(nanoseconds: NSEC_PER_SEC)
         var n = 0
         XCTAssert(decoder.formatDescription != nil)
-        for await decodedSampleBuffer in decodedStream {
+        for await (decodedSampleBuffer, ts) in decodedStream {
             n += 1
             try await Task.sleep(nanoseconds: NSEC_PER_SEC / 33)
             
             let q = decoder.enqueuedRemaining
-            print("read decodedSampleBuffer enqueuedRemaining: \(q)")
+            print("read decodedSampleBuffer enqueuedRemaining: \(q) \(ts?.timeIntervalSince1970 ?? 0)")
             XCTAssertNotNil(decodedSampleBuffer.imageBuffer)
             
             let ci = CIImage(cvImageBuffer: decodedSampleBuffer.imageBuffer!)

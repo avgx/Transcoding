@@ -39,7 +39,7 @@ public class VideoDecoderFmp4Adaptor {
         self.logger = logger
     }
     
-    public func enqueue(data: Data) throws {
+    public func enqueue(data: Data, ts: Date?) throws {
         buffer.append(data)
         if buffer.count > 4_000_000 {
             self.logger?.warning("\(self.uuid) buffer size \(self.buffer.count)")
@@ -47,7 +47,7 @@ public class VideoDecoderFmp4Adaptor {
         var consumed = 0
         while(buffer.count > 0) {
             try buffer.withUnsafeBytes {
-                consumed = try parse(pointer: $0, count: buffer.count, parent: "")
+                consumed = try parse(pointer: $0, count: buffer.count, parent: "", ts: ts)
                 bytesConsumed += consumed
             }
             if consumed == 0 {
@@ -59,7 +59,7 @@ public class VideoDecoderFmp4Adaptor {
     
     var needDropPFrames: Bool = false
     
-    func decodeAVCCFrame(_ data: Data, I: Bool) {
+    func decodeAVCCFrame(_ data: Data, I: Bool, ts: Date?) {
         
         guard let formatDescription else {
             //self.logger?.warning("No format description; need sync frame")
@@ -80,7 +80,7 @@ public class VideoDecoderFmp4Adaptor {
         }
         
         let enqueuedRemaining = videoDecoder.enqueuedRemaining
-        self.logger?.log(level: .debug, "\(self.uuid) decodeAVCCFrame I:\(I) enqueuedRemaining:\(enqueuedRemaining)")
+        self.logger?.log(level: .debug, "\(self.uuid) decodeAVCCFrame I:\(I) enqueuedRemaining:\(enqueuedRemaining) \(ts?.timeIntervalSince1970)")
         
         var data = data
         data.withUnsafeMutableBytes { pointer in
@@ -94,7 +94,7 @@ public class VideoDecoderFmp4Adaptor {
                     sampleSizes: []
                 )
                 
-                videoDecoder.decode(sampleBuffer)
+                videoDecoder.decode(sampleBuffer, ts: ts)
                 
             } catch {
                 self.logger?.error("\(self.uuid) Failed to create sample buffer with error: \(error)")
@@ -105,7 +105,7 @@ public class VideoDecoderFmp4Adaptor {
     static let UInt32Size = MemoryLayout<UInt32>.size
     /// return consumed bytes
     /// docs about: https://swiftdoc.org/v5.1/type/unsaferawbufferpointer/
-    private func parse(pointer: UnsafeRawBufferPointer, count: Int, parent: String) throws -> Int {
+    private func parse(pointer: UnsafeRawBufferPointer, count: Int, parent: String, ts: Date?) throws -> Int {
         guard count >= 8 else {
             //not enouph data to get size and type
             return 0
@@ -152,7 +152,7 @@ public class VideoDecoderFmp4Adaptor {
         self.logger?.debug("\(self.uuid) \(parent)/\(typeAscii)(\(boxSize))")
         //TODO: consume atom with inner structure from array `rebased`
         //consume boxSize bytes
-        try consumeBox(pointer: rebased, count: sliceCount, parent: parent, atom: typeAscii)
+        try consumeBox(pointer: rebased, count: sliceCount, parent: parent, atom: typeAscii, ts: ts)
         
         if typeAscii == "ftyp" {
             ftypDone = true
@@ -165,13 +165,13 @@ public class VideoDecoderFmp4Adaptor {
     }
     
     /// we sure that box is complete in inner
-    private func parseInner(pointer: UnsafeRawBufferPointer, count: Int, atom: String) throws -> Int {
+    private func parseInner(pointer: UnsafeRawBufferPointer, count: Int, atom: String, ts: Date?) throws -> Int {
         var consumed = 0
         while consumed < count {
             let slice = pointer[consumed...]
             let sliceCount = count - consumed
             let rebased = UnsafeRawBufferPointer(rebasing: slice)
-            let done = try parse(pointer: rebased, count: sliceCount, parent: atom)
+            let done = try parse(pointer: rebased, count: sliceCount, parent: atom, ts: ts)
             if done == 0 {
                 break
             }
@@ -180,7 +180,7 @@ public class VideoDecoderFmp4Adaptor {
         return consumed
     }
     
-    private func consumeBox(pointer: UnsafeRawBufferPointer, count: Int, parent: String, atom: String) throws {
+    private func consumeBox(pointer: UnsafeRawBufferPointer, count: Int, parent: String, atom: String, ts: Date?) throws {
         //here we get a complete loaded atom.
         switch atom {
             
@@ -189,13 +189,13 @@ public class VideoDecoderFmp4Adaptor {
             self.logger?.debug("\(self.uuid) ftyp \(count) bytes \(Array(pointer).hex())")
         case "moov":
             self.logger?.debug("\(self.uuid) moov \(count) bytes \(Array(pointer).hex())")
-            _ = try parseInner(pointer: pointer, count: count, atom: atom)
+            _ = try parseInner(pointer: pointer, count: count, atom: atom, ts: ts)
         case "moof":
             self.logger?.debug("\(self.uuid) moof \(count) bytes")
-            _ = try parseInner(pointer: pointer, count: count, atom: atom)
+            _ = try parseInner(pointer: pointer, count: count, atom: atom, ts: ts)
         case "mdat":
             self.logger?.debug("\(self.uuid) mdat \(count) bytes")
-            consumeBox_mdat(pointer: pointer, count: count)
+            consumeBox_mdat(pointer: pointer, count: count, ts: ts)
             // known usefull atoms
         case "avc1":
             // /moov/trak/mdia/minf/stbl/stsd/avc1
@@ -210,7 +210,7 @@ public class VideoDecoderFmp4Adaptor {
             let sliceCount = count - (8+offset)
             let rebased = UnsafeRawBufferPointer(rebasing: slice)
             //avc1 / hvc1
-            _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)")
+            _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)", ts: ts)
         case "hvc1", "hev1":
             let xwidth: UInt16 = UInt16(pointer[24]) << 8 | UInt16(pointer[25])
             let xheight: UInt16 = UInt16(pointer[26]) << 8 | UInt16(pointer[27])
@@ -223,7 +223,7 @@ public class VideoDecoderFmp4Adaptor {
             let sliceCount = count - (8+offset)
             let rebased = UnsafeRawBufferPointer(rebasing: slice)
             //avc1 / hvc1
-            _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)")
+            _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)", ts: ts)
         case "avcC":
             self.logger?.debug("\(self.uuid) avcC \(Array(pointer).hex())")
             let x = try Atom_avcC(data: Array(pointer))
@@ -248,7 +248,7 @@ public class VideoDecoderFmp4Adaptor {
             
             // inner box with inner atoms
         case "trak", "mdia", "minf", "stbl", "traf":
-            _ = try parseInner(pointer: pointer, count: count, atom: "\(parent)/\(atom)")
+            _ = try parseInner(pointer: pointer, count: count, atom: "\(parent)/\(atom)", ts: ts)
             
         case "stsd":
             //let x = Atom_stsd(data: Array(pointer))
@@ -256,7 +256,7 @@ public class VideoDecoderFmp4Adaptor {
             let sliceCount = count - 8
             let rebased = UnsafeRawBufferPointer(rebasing: slice)
             //avc1 / hvc1
-            _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)")
+            _ = try parse(pointer: rebased, count: sliceCount, parent: "\(parent)/\(atom)", ts: ts)
             // just box without inner. contains content, not size+atom+data
             //case "stsd", "dinf", "vmhd", "hdlr", "edts", "esds",
             //    "tfdt", "trik", "ctts", "stts", "stco", "stsc":
@@ -300,7 +300,7 @@ public class VideoDecoderFmp4Adaptor {
         
     }
     
-    private func consume_nalu265(pointer: UnsafeRawBufferPointer, count: Int) {
+    private func consume_nalu265(pointer: UnsafeRawBufferPointer, count: Int, ts: Date?) {
         precondition(trackID == 1)
         precondition(is265)
         precondition(self.formatDescription != nil)
@@ -324,13 +324,13 @@ public class VideoDecoderFmp4Adaptor {
             //self.onFrame(format, naluData, true, seq)
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, I: true)
+            self.decodeAVCCFrame(avcc, I: true, ts: ts)
         case 0x02:  // P    Type:2 //x:1
             //onFrame(naluData)
             //self.onFrame(format, naluData, false, seq)
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, I: false)
+            self.decodeAVCCFrame(avcc, I: false, ts: ts)
         case 0x40:  // VPS  Type:64 //x:32
             self.logger?.debug("\(self.uuid) VPS")
         case 0x42:  // SPS  Type:66 //x:33
@@ -342,7 +342,7 @@ public class VideoDecoderFmp4Adaptor {
         }
     }
     
-    private func consume_nalu264(pointer: UnsafeRawBufferPointer, count: Int) {
+    private func consume_nalu264(pointer: UnsafeRawBufferPointer, count: Int, ts: Date?) {
         precondition(trackID == 1)
         precondition(is264)
         precondition(self.formatDescription != nil)
@@ -362,7 +362,7 @@ public class VideoDecoderFmp4Adaptor {
             self.logger?.debug("\(self.uuid) Nal type is IDR frame")
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, I: true)
+            self.decodeAVCCFrame(avcc, I: true, ts: ts)
         case 0x07:
             self.logger?.debug("\(self.uuid) Nal type is SPS")
         case 0x08:
@@ -372,7 +372,7 @@ public class VideoDecoderFmp4Adaptor {
             //            if nalType2 == 65 { //
             let bigEndianLength = CFSwapInt32HostToBig(UInt32(naluData.count))
             let avcc = withUnsafeBytes(of: bigEndianLength) { Data($0) } + naluData
-            self.decodeAVCCFrame(avcc, I: false)
+            self.decodeAVCCFrame(avcc, I: false, ts: ts)
             //            }
         default:
             self.logger?.debug("\(self.uuid) Nal type ignore \(nalType)")
@@ -400,7 +400,7 @@ public class VideoDecoderFmp4Adaptor {
     //    Nal type is B/P frame
     //    NALU Nal type nalType:1 nalType2:1 x:0 count:232 seq:127
     //
-    private func consumeBox_mdat(pointer: UnsafeRawBufferPointer, count: Int) {
+    private func consumeBox_mdat(pointer: UnsafeRawBufferPointer, count: Int, ts: Date?) {
         
         guard trackID == 1 else {
             //think that video is track 1 always
@@ -430,9 +430,9 @@ public class VideoDecoderFmp4Adaptor {
             let rebased = UnsafeRawBufferPointer(rebasing: nalu)
             
             if is265 {
-                consume_nalu265(pointer: rebased, count: nalCount)
+                consume_nalu265(pointer: rebased, count: nalCount, ts: ts)
             } else if is264 {
-                consume_nalu264(pointer: rebased, count: nalCount)
+                consume_nalu264(pointer: rebased, count: nalCount, ts: ts)
             } else {
                 fatalError()
             }

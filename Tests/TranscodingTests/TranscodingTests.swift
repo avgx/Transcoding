@@ -19,10 +19,10 @@ final class TranscodingTests: XCTestCase {
             XCTAssertEqual(encodedSampleBuffer.formatDescription?.mediaSubType, .hevc)
 
             let decoder = VideoDecoder(config: .init())
-            stream = decoder.decodedSampleBuffers.makeAsyncIterator()
+            var stream2 = decoder.decodedSampleBuffers.makeAsyncIterator()
             decoder.setFormatDescription(encodedSampleBuffer.formatDescription!)
             decoder.decode(encodedSampleBuffer)
-            let decodedSampleBuffer = await stream.next()!
+            let (decodedSampleBuffer, _) = await stream2.next()!
             XCTAssertNotNil(decodedSampleBuffer.imageBuffer)
             XCTAssertEqual(CVPixelBufferGetWidth(decodedSampleBuffer.imageBuffer!), CVPixelBufferGetWidth(pixelBuffer))
             XCTAssertEqual(CVPixelBufferGetHeight(decodedSampleBuffer.imageBuffer!), CVPixelBufferGetHeight(pixelBuffer))
@@ -43,10 +43,10 @@ final class TranscodingTests: XCTestCase {
             XCTAssertTrue(encoder.sessionInvalidated)
 
             let decoder = VideoDecoder(config: .init())
-            stream = decoder.decodedSampleBuffers.makeAsyncIterator()
+            var stream2 = decoder.decodedSampleBuffers.makeAsyncIterator()
             decoder.setFormatDescription(encodedSampleBuffer.formatDescription!)
             decoder.decode(encodedSampleBuffer)
-            _ = await stream.next()
+            _ = await stream2.next()
             XCTAssertFalse(decoder.sessionInvalidated)
             decoder.config.realTime = false
             XCTAssertTrue(decoder.sessionInvalidated)
@@ -63,9 +63,9 @@ final class TranscodingTests: XCTestCase {
             XCTAssertEqual(encoder.continuations.count, 0)
 
             let decoder = VideoDecoder(config: .init())
-            stream = decoder.decodedSampleBuffers
+            var stream2: AsyncStream<CMSampleBufferWithDate>? = decoder.decodedSampleBuffers
             XCTAssertEqual(decoder.continuations.count, 1)
-            stream = nil
+            stream2 = nil
             XCTAssertEqual(decoder.continuations.count, 0)
         }
     }
@@ -87,7 +87,7 @@ final class TranscodingTests: XCTestCase {
             let annexBData = await annexBStream.next()!
 
             decoderAdaptor.decode(annexBData)
-            let decodedSampleBuffer = await decodedStream.next()!
+            let (decodedSampleBuffer, _) = await decodedStream.next()!
 
             XCTAssertNotNil(decodedSampleBuffer.imageBuffer)
             XCTAssertEqual(CVPixelBufferGetWidth(decodedSampleBuffer.imageBuffer!), CVPixelBufferGetWidth(pixelBuffer))
