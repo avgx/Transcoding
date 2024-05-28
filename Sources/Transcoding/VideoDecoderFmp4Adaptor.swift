@@ -39,7 +39,7 @@ public class VideoDecoderFmp4Adaptor {
         self.logger = logger
     }
     
-    public func enqueue(data: Data, ts: Date?) throws {
+    public func enqueue(data: Data, ts: Date? = nil) throws {
         buffer.append(data)
         if buffer.count > 4_000_000 {
             self.logger?.warning("\(self.uuid) buffer size \(self.buffer.count)")
@@ -479,7 +479,7 @@ extension Atom_avcC {
         //e1      // 3 bits reserved + SPS count
         //001d    // spslen
         self.NALULengthSizeMinusOne = data[4] & 0x03
-        print(NALULengthSizeMinusOne)
+        //print(NALULengthSizeMinusOne)
         let spsCount = (data[5] & 0x1F)
         
         let spsSizeValue = Int(data[6] << 8 | data[7])

@@ -97,7 +97,6 @@ public final class VideoDecoder {
     }
 
     public func decode(_ sampleBuffer: CMSampleBuffer, ts: Date? = nil) {
-        print("ts: \(ts?.timeIntervalSince1970)")
         decodingQueue.sync {
             if decompressionSession == nil || sessionInvalidated {
                 decompressionSession = createDecompressionSession()
@@ -130,7 +129,6 @@ public final class VideoDecoder {
                                 sampleTiming: sampleTiming
                             )
                             for continuation in self.continuations.values {
-                                print("ts: \(ts?.timeIntervalSince1970)")
                                 let yieldResult = continuation.yield((sampleBuffer, ts))
                                 switch yieldResult {
                                 case .enqueued(let remaining):
@@ -141,7 +139,7 @@ public final class VideoDecoder {
                                 case .terminated:
                                     Self.logger.info("terminated")
                                 @unknown default:
-                                    print("unknown")
+                                    Self.logger.error("unknown")
                                 }
                             }
                         } catch {
