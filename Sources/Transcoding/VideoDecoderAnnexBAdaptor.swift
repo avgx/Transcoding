@@ -1,6 +1,6 @@
 import CoreMedia
 import Foundation
-import OSLog
+import Logging
 
 // MARK: - VideoDecoderAnnexBAdaptor
 
@@ -28,7 +28,7 @@ public final class VideoDecoderAnnexBAdaptor {
 
     // MARK: Internal
 
-    static let logger = Logger(subsystem: "Transcoding", category: "VideoDecoderAnnexBAdaptor")
+    static let logger = Logger(label: "Transcoding")
 
     let videoDecoder: VideoDecoder
     let codec: Codec
@@ -51,7 +51,7 @@ public final class VideoDecoderAnnexBAdaptor {
                         videoDecoder.setFormatDescription(formatDescription)
                         self.formatDescription = formatDescription
                     } catch {
-                        Self.logger.error("Failed to create format description with error: \(error, privacy: .public)")
+                        Self.logger.error("Failed to create format description with error: \(error)")
                     }
                 }
                 decodeAVCCFrame(nalu.avcc)
@@ -74,7 +74,7 @@ public final class VideoDecoderAnnexBAdaptor {
                         videoDecoder.setFormatDescription(formatDescription)
                         self.formatDescription = formatDescription
                     } catch {
-                        Self.logger.error("Failed to create format description with error: \(error, privacy: .public)")
+                        Self.logger.error("Failed to create format description with error: \(error)")
                     }
                 }
                 decodeAVCCFrame(nalu.avcc)
@@ -100,7 +100,7 @@ public final class VideoDecoderAnnexBAdaptor {
                 )
                 videoDecoder.decode(sampleBuffer)
             } catch {
-                Self.logger.error("Failed to create sample buffer with error: \(error, privacy: .public)")
+                Self.logger.error("Failed to create sample buffer with error: \(error)")
             }
         }
     }

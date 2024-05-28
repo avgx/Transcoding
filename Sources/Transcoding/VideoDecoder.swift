@@ -1,5 +1,5 @@
 import Foundation
-import OSLog
+import Logging
 import VideoToolbox
 #if canImport(UIKit)
 import UIKit
@@ -139,19 +139,19 @@ public final class VideoDecoder {
                                 }
                             }
                         } catch {
-                            Self.logger.error("Error in decode frame output handler: \(error, privacy: .public)")
+                            Self.logger.error("Error in decode frame output handler: \(error)")
                         }
                     }
                 }
             } catch {
-                Self.logger.error("Failed to decode frame with error: \(error, privacy: .public)")
+                Self.logger.error("Failed to decode frame with error: \(error)")
             }
         }
     }
 
     // MARK: Internal
 
-    static let logger = Logger(subsystem: "Transcoding", category: "VideoDecoder")
+    static let logger = Logger(label: "Transcoding")
 
     var continuations: [UUID: AsyncStream<CMSampleBuffer>.Continuation] = [:]
 
@@ -211,7 +211,7 @@ public final class VideoDecoder {
             config.apply(to: session)
             return session
         } catch {
-            Self.logger.error("Failed to create decompression session with error: \(error, privacy: .public)")
+            Self.logger.error("Failed to create decompression session with error: \(error)")
             return nil
         }
     }

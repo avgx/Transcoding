@@ -1,6 +1,6 @@
 import CoreMedia
 import Foundation
-import OSLog
+import Logging
 
 public final class VideoEncoderAnnexBAdaptor {
     // MARK: Lifecycle
@@ -108,7 +108,7 @@ public final class VideoEncoderAnnexBAdaptor {
 
     // MARK: Internal
 
-    static let logger = Logger(subsystem: "Transcoding", category: "VideoEncoderAnnexBAdaptor")
+    static let logger = Logger(label: "Transcoding")
 
     let videoEncoder: VideoEncoder
     var conversionTask: Task<Void, Never>?

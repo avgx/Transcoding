@@ -1,6 +1,6 @@
 import Foundation
 import CoreMedia
-import OSLog
+import Logging
 
 public class VideoDecoderFmp4Adaptor {
     
@@ -33,7 +33,7 @@ public class VideoDecoderFmp4Adaptor {
     let uuid: UUID
     let logger: Logger?
     
-    public init(videoDecoder: VideoDecoder, uuid: UUID, logger: Logger? = Logger(subsystem: "Transcoding", category: "VideoDecoderFmp4Adaptor")) {
+    public init(videoDecoder: VideoDecoder, uuid: UUID, logger: Logger? = Logger(label: "Transcoding")) {
         self.videoDecoder = videoDecoder
         self.uuid = uuid
         self.logger = logger
@@ -68,19 +68,19 @@ public class VideoDecoderFmp4Adaptor {
         
         if videoDecoder.isBufferAlmostFull && !needDropPFrames {
             needDropPFrames = true
-            self.logger?.log("\(self.uuid) isBufferAlmostFull")
+            self.logger?.log(level: .debug, "\(self.uuid) isBufferAlmostFull")
         } else if videoDecoder.isBufferAlmostEmpty && needDropPFrames {
             needDropPFrames = false
-            self.logger?.log("\(self.uuid) isBufferAlmostEmpty")
+            self.logger?.log(level: .debug, "\(self.uuid) isBufferAlmostEmpty")
         }
         
         if !I && needDropPFrames {
-            self.logger?.log("\(self.uuid) decodeAVCCFrame drop P frame")
+            self.logger?.log(level: .debug, "\(self.uuid) decodeAVCCFrame drop P frame")
             return
         }
         
         let enqueuedRemaining = videoDecoder.enqueuedRemaining
-        self.logger?.log("\(self.uuid) decodeAVCCFrame I:\(I) enqueuedRemaining:\(enqueuedRemaining)")
+        self.logger?.log(level: .debug, "\(self.uuid) decodeAVCCFrame I:\(I) enqueuedRemaining:\(enqueuedRemaining)")
         
         var data = data
         data.withUnsafeMutableBytes { pointer in
@@ -97,7 +97,7 @@ public class VideoDecoderFmp4Adaptor {
                 videoDecoder.decode(sampleBuffer)
                 
             } catch {
-                self.logger?.error("\(self.uuid) Failed to create sample buffer with error: \(error, privacy: .public)")
+                self.logger?.error("\(self.uuid) Failed to create sample buffer with error: \(error)")
             }
         }
     }

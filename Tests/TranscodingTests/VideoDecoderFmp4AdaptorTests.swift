@@ -1,4 +1,5 @@
 import CoreMedia
+import Logging
 @testable import Transcoding
 import XCTest
 
@@ -27,11 +28,13 @@ extension Data {
 
 final class VideoDecoderFmp4AdaptorTests: XCTestCase {
     func test264start() async throws {
+        let logger = Logger(label: "Fmp4")
+        logger.info("fmp4-h264-stream-start")
         let d = bin_data(fromFile: "fmp4-h264-stream-start")!
         
         let decoder = VideoDecoder(config: .init())
         var decodedStream = decoder.decodedSampleBuffers.makeAsyncIterator()
-        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, uuid: UUID())
+        let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, uuid: UUID(), logger: logger)
         
         let chunks = d.split(by: 256)
         
