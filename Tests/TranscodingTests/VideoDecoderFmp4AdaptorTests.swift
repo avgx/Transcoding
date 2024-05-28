@@ -69,21 +69,25 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
         let decoderAdaptor = VideoDecoderFmp4Adaptor(videoDecoder: decoder, uuid: UUID(), logger: nil)
         
         let chunks = d.split(by: 256)
+        var done = false
         
         Task {
             for chunk in chunks {
                 print("enqueue chunk")
                 try decoderAdaptor.enqueue(data: chunk)
-//                try await Task.sleep(nanoseconds: NSEC_PER_SEC / 10)
+                try await Task.sleep(nanoseconds: NSEC_PER_SEC / 10)
             }
             print("done chunks")
+            decoder.invalidate()
         }
         
-//        try await Task.sleep(nanoseconds: NSEC_PER_SEC)
-        
+        try await Task.sleep(nanoseconds: NSEC_PER_SEC)
+        var n = 0
         XCTAssert(decoder.formatDescription != nil)
         for await decodedSampleBuffer in decodedStream {
+            n += 1
             try await Task.sleep(nanoseconds: NSEC_PER_SEC / 33)
+            
             let q = decoder.enqueuedRemaining
             print("read decodedSampleBuffer enqueuedRemaining: \(q)")
             XCTAssertNotNil(decodedSampleBuffer.imageBuffer)
@@ -92,6 +96,9 @@ final class VideoDecoderFmp4AdaptorTests: XCTestCase {
             let image = UIImage(ciImage: ci)
             XCTAssertEqual(image.size.width, 640)
             XCTAssertEqual(image.size.height, 360)
+            if n > 10 {
+                break
+            }
             
         }
         print("done")
