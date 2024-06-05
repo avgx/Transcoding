@@ -7,12 +7,8 @@ public class VideoDecoderFmp4Adaptor {
     var trackID: Int?
     var sequenceNumber: Int?
     
-    public var is264: Bool {
-        sps != nil && pps != nil && vps == nil
-    }
-    public var is265: Bool {
-        sps != nil && pps != nil && vps != nil
-    }
+    public private(set) var is264: Bool = false
+    public private(set) var is265: Bool = false
     
     var ftypDone: Bool = false
     var moovDone: Bool = false
@@ -127,6 +123,10 @@ public class VideoDecoderFmp4Adaptor {
             throw Mp4ParseError.unexpectedAtom
         }
         
+        if parent.isEmpty && ftypDone && moovDone && typeAscii == "mdat" && !(is264 || is265) {
+            throw Mp4ParseError.unexpectedFormat
+        }
+        
         if parent.isEmpty && !["moof", "mdat", "ftyp", "moov"].contains(typeAscii) {
             throw Mp4ParseError.unexpectedAtom
         }
@@ -232,6 +232,7 @@ public class VideoDecoderFmp4Adaptor {
             let formatDescription = try x.formatDescription()
             self.videoDecoder.setFormatDescription(formatDescription)
             self.formatDescription = formatDescription
+            self.is264 = true
         case "hvcC":
             self.logger?.debug("\(self.uuid) hvcC \(Array(pointer).hex())")
             let x = dump_hvcC(data: Array(pointer))
@@ -241,6 +242,7 @@ public class VideoDecoderFmp4Adaptor {
             let formatDescription = try CMVideoFormatDescription(hevcParameterSets: [Data(x.vps), Data(x.sps), Data(x.pps)])
             self.videoDecoder.setFormatDescription(formatDescription)
             self.formatDescription = formatDescription
+            self.is265 = true
         case "tfhd":
             consumeBox_tfhd(pointer: pointer, count: count)
         case "mfhd":
@@ -447,6 +449,7 @@ public enum Mp4ParseError : Error {
     
     case typeNotAscii
     case unexpectedAtom
+    case unexpectedFormat
     case veryLargeFrame
 }
 
