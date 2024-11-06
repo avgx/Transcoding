@@ -4,7 +4,8 @@ import Logging
 
 public class VideoDecoderFmp4Adaptor {
     
-    var trackID: Int?
+    var videoTrackID: Int?
+    var trackID: Int? = -1
     var sequenceNumber: Int?
     
     public private(set) var is264: Bool = false
@@ -232,6 +233,7 @@ public class VideoDecoderFmp4Adaptor {
             let formatDescription = try x.formatDescription()
             self.videoDecoder.setFormatDescription(formatDescription)
             self.formatDescription = formatDescription
+            self.videoTrackID = self.trackID
             self.is264 = true
         case "hvcC":
             self.logger?.debug("\(self.uuid) hvcC \(Array(pointer).hex())")
@@ -242,7 +244,10 @@ public class VideoDecoderFmp4Adaptor {
             let formatDescription = try CMVideoFormatDescription(hevcParameterSets: [Data(x.vps), Data(x.sps), Data(x.pps)])
             self.videoDecoder.setFormatDescription(formatDescription)
             self.formatDescription = formatDescription
+            self.videoTrackID = self.trackID
             self.is265 = true
+        case "tkhd":
+            consumeBox_tkhd(pointer: pointer, count: count)
         case "tfhd":
             consumeBox_tfhd(pointer: pointer, count: count)
         case "mfhd":
@@ -286,6 +291,43 @@ public class VideoDecoderFmp4Adaptor {
         
     }
     
+//    type Measurement uint32
+//
+//    type Box struct {
+//        base.Box
+//        Version          uint8
+//        Flags            uint32
+//        CreationTime     uint64
+//        ModificationTime uint64
+//        TrackID          uint32
+//        _reserved0       uint32
+//        Duration         uint64
+//        _reserved1       [2]uint32
+//        Layer            int16
+//        AlternateGroup   int16
+//        Volume           int16
+//        _reserved2       uint16
+//        Matrix           [9]int32
+//        Width            Measurement
+//        Height           Measurement
+//        raw              []byte
+//    }
+    private func consumeBox_tkhd(pointer: UnsafeRawBufferPointer, count: Int) {
+        let versionAndFlags_bytes: [UInt8] = Array(pointer[0..<4])
+        let versionAndFlags: UInt32 = versionAndFlags_bytes.uint32Value
+        //        let version = versionAndFlags >> 24
+        let flags = versionAndFlags & 0x00ffffff
+        //00000020  // Version byte, Flags   uint32, FlagsMask = 0x00ffffff, byte(vf >> 24), vf & FlagsMask
+        //00000001  // TrackID
+        //000100c0  // depend on flags
+        
+        let TrackID_bytes: [UInt8] = Array(pointer[12..<16])
+        let TrackID = TrackID_bytes.uint32Value
+        self.logger?.debug("\(self.uuid) tkhd: TrackID \(TrackID)")
+        self.trackID = Int(TrackID)
+        
+    }
+    
     private func consumeBox_mfhd(pointer: UnsafeRawBufferPointer, count: Int) {
         
         let versionAndFlags_bytes: [UInt8] = Array(pointer[0..<4])
@@ -303,7 +345,7 @@ public class VideoDecoderFmp4Adaptor {
     }
     
     private func consume_nalu265(pointer: UnsafeRawBufferPointer, count: Int, ts: Date?) {
-        precondition(trackID == 1)
+        precondition(trackID == videoTrackID)
         precondition(is265)
         precondition(self.formatDescription != nil)
         
@@ -345,7 +387,7 @@ public class VideoDecoderFmp4Adaptor {
     }
     
     private func consume_nalu264(pointer: UnsafeRawBufferPointer, count: Int, ts: Date?) {
-        precondition(trackID == 1)
+        precondition(trackID == videoTrackID)
         precondition(is264)
         precondition(self.formatDescription != nil)
         
@@ -404,7 +446,7 @@ public class VideoDecoderFmp4Adaptor {
     //
     private func consumeBox_mdat(pointer: UnsafeRawBufferPointer, count: Int, ts: Date?) {
         
-        guard trackID == 1 else {
+        guard trackID == videoTrackID else {
             //think that video is track 1 always
             self.logger?.debug("\(self.uuid) audio from \(self.trackID ?? -1)")
             return
